@@ -5,7 +5,8 @@ const http = require('http')
 
 const express = require('express')
 const socketio = require('socket.io')
-
+const Filter  = require('bad-words')
+const {generateMessage, generateLocation} = require('./utils/messages')
 const app  =  express()
 
 const server = http.createServer(app)
@@ -20,9 +21,11 @@ let count = 0
 io.on('connection', (socket) =>{
     console.log('New web socket connection')
 
+    socket.emit('message', generateMessage('welcome'))
+
     socket.emit('countUpdated', count)
 
-    socket.broadcast.emit('message', 'A new user has entered the chat')
+    socket.broadcast.emit('message', generateMessage('A new user has entered the chat'))
 
     socket.on('increment', () =>{
         count++
@@ -31,12 +34,24 @@ io.on('connection', (socket) =>{
         io.emit('countUpdated', count)
     })
     
-    socket.on('sendMessage', (msg)=>{
-        io.emit('message', msg)
+    socket.on('sendMessage', (msg, callback)=>{
+        const filter = new Filter()
+
+        if(filter.isProfane(msg))
+        {
+            return callback('bad-words not allowed')
+        }
+        io.emit('message', generateMessage(msg))
+        callback()
+    })
+
+    socket.on('sendlocation', (coords, callback)=>{
+        io.emit('locationMessage', generateLocation(`https://google.com/maps?q=${coords.lat},${coords.lon}`))
+        callback()
     })
 
     socket.on('disconnect', ()=>{
-        io.emit('message', 'A user has left the chat')
+        io.emit('message', generateMessage('A user has left the chat'))
     })
 })
 
