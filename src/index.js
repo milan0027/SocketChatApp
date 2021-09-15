@@ -7,6 +7,8 @@ const express = require('express')
 const socketio = require('socket.io')
 const Filter  = require('bad-words')
 const {generateMessage, generateLocation} = require('./utils/messages')
+
+const { addUser, removeUser, getUser, getUsersInRoom } = require('./utils/users')
 const app  =  express()
 
 const server = http.createServer(app)
@@ -21,37 +23,67 @@ let count = 0
 io.on('connection', (socket) =>{
     console.log('New web socket connection')
 
-    socket.emit('message', generateMessage('welcome'))
+   
 
-    socket.emit('countUpdated', count)
+    socket.on('join', ({username, room}, callback)=>{
 
-    socket.broadcast.emit('message', generateMessage('A new user has entered the chat'))
+        const {error, user} = addUser({ id: socket.id, username, room})
 
-    socket.on('increment', () =>{
-        count++
-        //socket.emit('countUpdated', count)
+        if(error){
+            return callback(error)
 
-        io.emit('countUpdated', count)
+        }
+        socket.join(user.room)
+
+        socket.emit('message', generateMessage('Chat Bot', 'Welcome'))
+
+        socket.broadcast.to(user.room).emit('message', generateMessage('Chat Bot', `${user.username} has joined!!!`))
+        io.to(user.room).emit('roomdata', {
+            room: user.room,
+            users: getUsersInRoom(user.room)
+        })
+
+        callback()
+
+
     })
+
+    // socket.on('increment', () =>{
+    //     count++
+    //     //socket.emit('countUpdated', count)
+
+    //     io.emit('countUpdated', count)
+    // })
     
     socket.on('sendMessage', (msg, callback)=>{
+        const user = getUser(socket.id)
         const filter = new Filter()
 
         if(filter.isProfane(msg))
         {
             return callback('bad-words not allowed')
         }
-        io.emit('message', generateMessage(msg))
+        io.to(user.room).emit('message', generateMessage(user.username, msg))
         callback()
     })
 
     socket.on('sendlocation', (coords, callback)=>{
-        io.emit('locationMessage', generateLocation(`https://google.com/maps?q=${coords.lat},${coords.lon}`))
+        const user = getUser(socket.id)
+        io.to(user.room).emit('locationMessage', generateLocation(user.username,`https://google.com/maps?q=${coords.lat},${coords.lon}`))
         callback()
     })
 
     socket.on('disconnect', ()=>{
-        io.emit('message', generateMessage('A user has left the chat'))
+        const user = removeUser(socket.id)
+        if(user){
+            io.to(user.room).emit('message', generateMessage('Chat Bot', `${user.username} has left!!!`))
+            io.to(user.room).emit('roomdata', {
+                room: user.room,
+                users: getUsersInRoom(user.room)
+            })
+
+        }
+        
     })
 })
 
