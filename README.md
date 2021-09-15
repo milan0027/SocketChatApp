@@ -1,2 +1,2 @@
 # SocketChatApp
-A basic web based chat application build using socket.io
+A basic web based chat application built using socket.io
